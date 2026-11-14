@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Gravity Flip</title>
+<style>
+:root{box-sizing:border-box;color-scheme:dark;--bg:#070816;--fg:#fff;--accent:#5ee7ff;--pink:#ff4fd8}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{position:fixed;inset:0;display:block;width:100%;height:100%}
+#ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(7,8,22,.7);text-align:center;padding:24px}
+#ov h1{margin:0;font-size:40px;color:var(--accent);text-shadow:0 0 18px var(--accent)}
+#ov p{margin:0;max-width:300px;opacity:.85;line-height:1.4}
+#ov button{font-size:20px;font-weight:700;padding:14px 38px;border:0;border-radius:30px;background:var(--pink);color:#1a0415;cursor:pointer}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="ov"><h1 id="t">Gravity Flip</h1><p id="d">Tap anywhere (or press Space) to flip gravity. Dodge spikes and blocks, grab the gold coins.</p><button id="b">Play</button></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d'),$=id=>document.getElementById(id);
+let W,H,u,T,B,ps,px;
+function rs(){const d=Math.min(devicePixelRatio,2);W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;x.setTransform(d,0,0,d,0,0);u=Math.min(H,W*1.4)/700;T=Math.max(84,H*.11);B=H-Math.max(54,H*.08);ps=34*u;px=W*.22}
+addEventListener('resize',rs);rs();
+let st='menu',py=0,vy=0,dir=1,ang=0,tgt=0,spd=0,dist=0,coins=0,t=0,objs=[],cns=[],parts=[],nextX=0,best=0,shake=0;
+try{best=+localStorage.getItem('gf_best')||0}catch(e){}
+const R=Math.random;
+function reset(){dir=1;py=B-ps;vy=0;ang=0;tgt=0;dist=0;coins=0;t=0;objs=[];cns=[];parts=[];nextX=W+400*u;spd=320*u;st='play';$('ov').style.display='none'}
+function score(){return Math.floor(dist/(50*u))+coins*5}
+function flip(){if(st!='play')return;dir=-dir;tgt+=Math.PI/2;vy=dir*500*u}
+$('b').onclick=reset;
+addEventListener('pointerdown',e=>{if(e.target.id=='c')flip()});
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if([' ','arrowup','arrowdown','w','s'].includes(k)){e.preventDefault();if(st=='play')flip();else if(k==' ')reset()}if(k=='enter'&&st!='play')reset()});
+function spawn(sx){
+const r=R()*4|0,lane=R()<.5?1:-1;let w;
+if(r==2){w=46*u;const h=(B-T)*.5;objs.push({k:'b',x:sx,y:lane==1?B-h:T,w,h})}
+else{const n=r==3?3:1+(R()*2|0),sw=34*u,h=40*u;w=n*sw;for(let i=0;i<n;i++)objs.push({k:'s',x:sx+i*sw,w:sw,h,l:lane})}
+if(R()<.55)cns.push({x:sx+w/2,y:lane==1?T+ps/2:B-ps/2,r:11*u});
+nextX=sx+w+spd*(.75+R()*.55)}
+function boom(){for(let i=0;i<40;i++){const a=R()*6.28,s=(100+R()*400)*u;parts.push({x:px+ps/2,y:py+ps/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:1,c:R()<.5?'#5ee7ff':'#ff4fd8'})}}
+function die(){st='over';shake=.5;boom();const s=score();if(s>best){best=s;try{localStorage.setItem('gf_best',best)}catch(e){}}
+setTimeout(()=>{$('t').textContent='Crashed!';$('d').textContent='Score '+s+' · Best '+best+' · Coins '+coins;$('b').textContent='Play again';$('ov').style.display='flex'},600)}
+function hit(o){let rx,ry,rw,rh;
+if(o.k=='b'){rx=o.x;ry=o.y;rw=o.w;rh=o.h}else{rx=o.x+o.w*.22;rw=o.w*.56;rh=o.h*.7;ry=o.l==1?B-rh:T}
+const a=px+5*u,b=py+5*u,s=ps-10*u;return a<rx+rw&&a+s>rx&&b<ry+rh&&b+s>ry}
+function update(dt){
+t+=dt;spd=Math.min((320+t*7)*u,640*u);const mv=spd*dt;dist+=mv;
+vy+=dir*11000*u*dt;py+=vy*dt;
+if(py>B-ps){py=B-ps;vy=0}if(py<T){py=T;vy=0}
+ang+=(tgt-ang)*Math.min(1,dt*26);
+objs.forEach(o=>o.x-=mv);cns.forEach(c=>c.x-=mv);nextX-=mv;
+if(nextX<W+100*u)spawn(nextX);
+objs=objs.filter(o=>o.x+o.w>-20);
+for(const o of objs)if(hit(o)){die();return}
+cns=cns.filter(c=>{if(Math.hypot(c.x-(px+ps/2),c.y-(py+ps/2))<c.r+ps*.6){coins++;return false}return c.x>-30});
+parts.push({x:px+ps/2,y:py+ps/2,vx:-spd*.3,vy:(R()-.5)*60*u,l:.5,c:'#5ee7ff'})}
+function draw(n){
+x.save();if(shake>0)x.translate((R()-.5)*14*shake,(R()-.5)*14*shake);
+const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0b0d2a');g.addColorStop(1,'#1a0b2e');x.fillStyle=g;x.fillRect(-20,-20,W+40,H+40);
+x.strokeStyle='rgba(94,231,255,.07)';x.lineWidth=1;const gs=90*u,off=-(dist*.4)%gs;
+x.beginPath();for(let i=off;i<W;i+=gs){x.moveTo(i,T);x.lineTo(i,B)}for(let j=T;j<=B;j+=gs){x.moveTo(0,j);x.lineTo(W,j)}x.stroke();
+x.shadowColor='#5ee7ff';x.shadowBlur=14;x.strokeStyle='#5ee7ff';x.lineWidth=3;x.beginPath();x.moveTo(0,T);x.lineTo(W,T);x.moveTo(0,B);x.lineTo(W,B);x.stroke();
+x.fillStyle='rgba(94,231,255,.08)';x.fillRect(0,0,W,T);x.fillRect(0,B,W,H-B);
+x.shadowColor='#ff4fd8';x.fillStyle='#ff4fd8';
+for(const o of objs){if(o.k=='s'){x.beginPath();if(o.l==1){x.moveTo(o.x,B);x.lineTo(o.x+o.w/2,B-o.h);x.lineTo(o.x+o.w,B)}else{x.moveTo(o.x,T);x.lineTo(o.x+o.w/2,T+o.h);x.lineTo(o.x+o.w,T)}x.fill()}
+else{x.fillStyle='#7a3cff';x.shadowColor='#7a3cff';x.fillRect(o.x,o.y,o.w,o.h);x.fillStyle='#ff4fd8';x.shadowColor='#ff4fd8'}}
+x.shadowColor='#ffd54a';x.fillStyle='#ffd54a';for(const c of cns){x.beginPath();x.arc(c.x,c.y,c.r*(.85+.15*Math.sin(n/150)),0,6.28);x.fill()}
+x.shadowBlur=0;for(const p of parts){x.globalAlpha=Math.max(p.l,0);x.fillStyle=p.c;x.fillRect(p.x,p.y,5*u,5*u)}x.globalAlpha=1;
+if(st!='over'||shake>.1){x.save();x.translate(px+ps/2,py+ps/2);x.rotate(ang);x.shadowColor='#5ee7ff';x.shadowBlur=18;x.fillStyle='#5ee7ff';x.fillRect(-ps/2,-ps/2,ps,ps);x.shadowBlur=0;x.fillStyle='#07102a';x.fillRect(-ps/4,-ps/4,ps/2,ps/2);x.restore()}
+x.fillStyle='#fff';x.font='700 22px system-ui,sans-serif';x.textAlign='left';x.fillText(score(),16,44);
+x.font='500 13px system-ui,sans-serif';x.globalAlpha=.7;x.textAlign='right';x.fillText('Best '+best+'  ·  ● '+coins,W-16,44);x.globalAlpha=1;x.restore()}
+let last=performance.now();
+function loop(n){requestAnimationFrame(loop);const dt=Math.min((n-last)/1000,.05);last=n;
+if(st=='play')update(dt);else if(st=='menu'){dist+=200*u*dt;ang+=dt}
+for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.l-=dt*(st=='over'?1:2)}parts=parts.filter(p=>p.l>0);
+shake=Math.max(0,shake-dt);if(st=='menu'){py=B-ps}draw(n)}
+py=B-ps;requestAnimationFrame(loop);
+</script></body></html>
